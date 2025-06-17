@@ -23,7 +23,7 @@
 #include "./shared.h"
 
 namespace {
-float is_og_game = 1.f;
+bool postfinal_check = false;
 renodx::mods::shader::CustomShaders custom_shaders = {
     // original game
     CustomShaderEntry(0x8EF2D0AE),  // fxaa1
@@ -34,12 +34,23 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x0D7738C5),  // post final
     // The Eternal Die
     CustomShaderEntry(0x13EEF169),  // lutbuilder
-    CustomShaderEntryCallback(0xEF39E7C4, [](reshade::api::command_list* cmd_list) {  // uberpost
-    is_og_game = 0.f;
+    CustomShaderEntry(0x9862BA48),  // uberpost UI (mirror)
+    CustomShaderEntry(0xEF39E7C4),  // uberpost
+    CustomShaderEntry(0xE5C37261),  // uberpost
+    CustomShaderEntry(0xC244242D),  // fsr1
+    CustomShaderEntry(0xE102D2F9),  // fsr1 fxaa
+    CustomShaderEntryCallback(0xD00B5B47, [](reshade::api::command_list* cmd_list) {  // fxaa
+    postfinal_check = true;
     return true;
     }),
-    CustomShaderEntry(0xD00B5B47),  // fxaa
-    CustomShaderEntry(0xC244242D),  // fsr 1
+    CustomShaderEntryCallback(0x7CEF5F47, [](reshade::api::command_list* cmd_list) {  // rcas
+    postfinal_check = true;
+    return true;
+    }),
+    CustomShaderEntryCallback(0xB1CE8C1C, [](reshade::api::command_list* cmd_list) {  // no rcas (postfinal)
+    postfinal_check = true;
+    return true;
+    }),
     // common
     CustomShaderEntry(0x20133A8B),  // Final
 };
@@ -157,7 +168,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapHueShift",
         .binding = &shader_injection.toneMapHueShift,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -171,7 +182,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "toneMapHueCorrection",
         .binding = &shader_injection.toneMapHueCorrection,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tint = 0x1E5787,
@@ -369,8 +380,8 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
           renodx::utils::settings::UpdateSetting("toneMapColorSpace", 2.f);
           renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 2.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueShift", 100.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueShift", 50.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
@@ -395,7 +406,7 @@ renodx::utils::settings::Settings settings = {
             renodx::utils::settings::UpdateSetting("toneMapPerChannel", 1.f);
             renodx::utils::settings::UpdateSetting("toneMapColorSpace", 2.f);
             renodx::utils::settings::UpdateSetting("toneMapHueProcessor", 1.f);
-            renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 100.f);
+            renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);
             renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
             renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
             renodx::utils::settings::UpdateSetting("colorGradeShadows", 47.f);
@@ -436,10 +447,31 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSetting("colorGradeLUTSampling", 1.f); },
     },
     new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Known issue: FSR clamps colors to rec709.",
-        .section = "Notes",
-        .is_visible = []() { return is_og_game == 0.f; },
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Random rules!",
+        .section = "Color Grading Templates",
+        .group = "templates",
+        .tooltip = "RenoDiceX"
+        "\nUse at your own risk...",
+        .tint = 0x201018,
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("toneMapType", round(1.51f + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(4.49f-1.51f)))));
+          renodx::utils::settings::UpdateSetting("toneMapPerChannel", round(static_cast <float> (rand()) / static_cast <float> (RAND_MAX)));
+          renodx::utils::settings::UpdateSetting("toneMapColorSpace", round(static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/2.f))));
+          renodx::utils::settings::UpdateSetting("toneMapHueProcessor", round(static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/2.f))));
+          renodx::utils::settings::UpdateSetting("toneMapHueShift", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeExposure", 0.25f + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(1.75f-0.25f))));
+          renodx::utils::settings::UpdateSetting("colorGradeHighlights", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeShadows", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeContrast", (0.25f + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(0.75f-0.25f)))) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeSaturation", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeBlowout", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeDechroma", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeFlare", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeClip", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);
+          renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 100.f);},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -511,6 +543,8 @@ void OnPresent(
   shader_injection.random_1 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_2 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
   shader_injection.random_3 = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  shader_injection.postfinal_check = postfinal_check;
+  postfinal_check = false;
 }
 
 }  // namespace
@@ -545,6 +579,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .dimensions = {.width=1024, .height=32},
+      });
+      //  UI mirror (TED)
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .dimensions = {.width=1080, .height=1080},
       });
       //  RGB10A2_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
